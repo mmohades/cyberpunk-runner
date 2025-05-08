@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background gradient -->
+    <defs>
+        <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#0a0a1a"/>
+            <stop offset="100%" style="stop-color:#1a1a2e"/>
+        </linearGradient>
+    </defs>
+    
+    <!-- Main background -->
+    <rect x="0" y="0" width="1280" height="720" fill="url(#bgGradient)"/>
+    
+    <!-- Grid lines -->
+    <g stroke="#00ff9d" stroke-width="1" opacity="0.1">
+        <line x1="0" y1="0" x2="1280" y2="0"/>
+        <line x1="0" y1="180" x2="1280" y2="180"/>
+        <line x1="0" y1="360" x2="1280" y2="360"/>
+        <line x1="0" y1="540" x2="1280" y2="540"/>
+        <line x1="0" y1="720" x2="1280" y2="720"/>
+        
+        <line x1="0" y1="0" x2="0" y2="720"/>
+        <line x1="320" y1="0" x2="320" y2="720"/>
+        <line x1="640" y1="0" x2="640" y2="720"/>
+        <line x1="960" y1="0" x2="960" y2="720"/>
+        <line x1="1280" y1="0" x2="1280" y2="720"/>
+    </g>
+    
+    <!-- Floating particles -->
+    <g fill="#00ff9d" opacity="0.3">
+        <circle cx="100" cy="100" r="2">
+            <animate attributeName="cy" values="100;700;100" dur="20s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="300" cy="200" r="2">
+            <animate attributeName="cy" values="200;600;200" dur="15s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="500" cy="300" r="2">
+            <animate attributeName="cy" values="300;500;300" dur="25s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="700" cy="400" r="2">
+            <animate attributeName="cy" values="400;400;400" dur="18s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="900" cy="500" r="2">
+            <animate attributeName="cy" values="500;300;500" dur="22s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="1100" cy="600" r="2">
+            <animate attributeName="cy" values="600;200;600" dur="17s" repeatCount="indefinite"/>
+        </circle>
+    </g>
+</svg> 

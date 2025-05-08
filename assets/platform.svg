@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="40" viewBox="0 0 300 40" xmlns="http://www.w3.org/2000/svg">
+    <!-- Main platform -->
+    <rect x="0" y="0" width="300" height="40" fill="#2a2a4a"/>
+    
+    <!-- Neon strip -->
+    <rect x="0" y="35" width="300" height="5" fill="#00ff9d"/>
+    
+    <!-- Circuit patterns -->
+    <path d="M20 10 L40 10 M60 10 L80 10 M100 10 L120 10 M140 10 L160 10 M180 10 L200 10 M220 10 L240 10 M260 10 L280 10" 
+          stroke="#00ff9d" stroke-width="2" opacity="0.5"/>
+    
+    <!-- Glow effect -->
+    <rect x="0" y="35" width="300" height="5" fill="#00ff9d" filter="url(#glow)"/>
+    
+    <!-- Filter definitions -->
+    <defs>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+    </defs>
+</svg> 

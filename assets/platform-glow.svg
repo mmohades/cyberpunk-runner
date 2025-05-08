@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="310" height="50" viewBox="0 0 310 50" xmlns="http://www.w3.org/2000/svg">
+    <!-- Glow effect -->
+    <rect x="0" y="0" width="310" height="50" fill="#00ff9d" opacity="0.3">
+        <animate attributeName="opacity" values="0.3;0.5;0.3" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    
+    <!-- Filter definitions -->
+    <defs>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="5" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+    </defs>
+</svg> 
