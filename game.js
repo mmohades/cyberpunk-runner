@@ -1,7 +1,11 @@
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
+        this.ctx = this.canvas.getContext('2d', {
+            alpha: false,
+            desynchronized: true,
+            willReadFrequently: false
+        });
 
         // Initialize game parameters first
         this.minPlatformWidth = 100;
@@ -16,11 +20,26 @@ class Game {
         this.jumpForce = -9;
         this.maxJumps = 2;
 
+        // Performance optimization
+        this.lastFrameTime = 0;
+        this.targetFPS = 60;
+        this.frameInterval = 1000 / this.targetFPS;
+        this.accumulator = 0;
+        this.isAnimating = false;
+        this.lastPlatformCheck = 0;
+        this.platformCheckInterval = 100; // Check platforms every 100ms
+        this.visiblePlatforms = new Set();
+        this.visibleLavaPits = new Set();
+
         // Set initial canvas size
         this.setCanvasSize();
 
-        // Add resize event listener
-        window.addEventListener('resize', () => this.setCanvasSize());
+        // Add resize event listener with debounce
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => this.setCanvasSize(), 100);
+        });
 
         // Enhanced touch controls
         let touchStartY = 0;
@@ -231,17 +250,17 @@ class Game {
         });
 
         // Start game loop
-        this.lastTime = 0;
         this.animate(0);
     }
 
-    createJumpSound() {
+    playJumpSound() {
+        // Create a simple jump sound using Web Audio API
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
 
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime); // A5 note
-        oscillator.frequency.exponentialRampToValueAtTime(440, this.audioContext.currentTime + 0.1); // A4 note
+        oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(440, this.audioContext.currentTime + 0.1);
 
         gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
@@ -511,11 +530,13 @@ class Game {
             localStorage.setItem('highScore', this.highScore.toString());
         }
 
-        // Update player animation
-        this.player.frameTimer++;
-        if (this.player.frameTimer >= this.player.frameDelay) {
-            this.player.frame = (this.player.frame + 1) % this.player.frameCount;
-            this.player.frameTimer = 0;
+        // Update player animation only when needed
+        if (this.player.isJumping || this.player.velocityY !== 0) {
+            this.player.frameTimer++;
+            if (this.player.frameTimer >= this.player.frameDelay) {
+                this.player.frame = (this.player.frame + 1) % this.player.frameCount;
+                this.player.frameTimer = 0;
+            }
         }
 
         // Apply physics to player
@@ -533,21 +554,42 @@ class Game {
             this.player.onPlatform = false;
         }
 
-        // Platform collision
-        this.player.onPlatform = false;
-        for (const platform of this.platforms) {
-            if (this.checkPlatformCollision(this.player, platform)) {
-                this.player.y = platform.y - this.player.height;
-                this.player.velocityY = 0;
-                this.player.isJumping = false;
-                this.player.onPlatform = true;
-                this.player.jumpsRemaining = this.maxJumps;
-                break;
+        // Optimize platform collision checks
+        const now = Date.now();
+        if (now - this.lastPlatformCheck >= this.platformCheckInterval) {
+            this.lastPlatformCheck = now;
+            this.visiblePlatforms.clear();
+            this.visibleLavaPits.clear();
+
+            // Only check platforms that are visible on screen
+            for (const platform of this.platforms) {
+                if (platform.x + platform.width > 0 && platform.x < this.canvas.width) {
+                    this.visiblePlatforms.add(platform);
+                    if (this.checkPlatformCollision(this.player, platform)) {
+                        this.player.y = platform.y - this.player.height;
+                        this.player.velocityY = 0;
+                        this.player.isJumping = false;
+                        this.player.onPlatform = true;
+                        this.player.jumpsRemaining = this.maxJumps;
+                        break;
+                    }
+                }
+            }
+
+            // Only check lava pits that are visible on screen
+            for (const lavaPit of this.lavaPits) {
+                if (lavaPit.x + lavaPit.width > 0 && lavaPit.x < this.canvas.width) {
+                    this.visibleLavaPits.add(lavaPit);
+                    if (this.checkLavaCollision(this.player, lavaPit)) {
+                        this.endGame();
+                        return;
+                    }
+                }
             }
         }
 
         // Calculate speed-based intervals
-        const speedFactor = Math.max(1, this.scrollSpeed / 3); // Normalize to base speed
+        const speedFactor = Math.max(1, this.scrollSpeed / 3);
         const platformInterval = this.basePlatformInterval / speedFactor;
         const lavaInterval = this.baseLavaInterval / speedFactor;
 
@@ -571,10 +613,9 @@ class Game {
         // Update lava pits
         this.lavaTimer += deltaTime;
         if (this.lavaTimer > lavaInterval) {
-            // 30% chance to spawn two lava pits close together
             if (Math.random() < 0.3) {
                 this.createLavaPit();
-                setTimeout(() => this.createLavaPit(), 800 / speedFactor); // Scale the delay with speed
+                setTimeout(() => this.createLavaPit(), 800 / speedFactor);
             } else {
                 this.createLavaPit();
             }
@@ -588,10 +629,6 @@ class Game {
 
             if (lavaPit.x + lavaPit.width < 0) {
                 this.lavaPits.splice(i, 1);
-            }
-
-            if (this.checkLavaCollision(this.player, lavaPit)) {
-                this.endGame();
             }
         }
     }
@@ -615,8 +652,8 @@ class Game {
         this.ctx.fillRect(0, this.groundY - 2, this.canvas.width, 4);
         this.ctx.globalAlpha = 1.0;
 
-        // Draw platforms
-        this.platforms.forEach(platform => {
+        // Draw only visible platforms
+        for (const platform of this.visiblePlatforms) {
             // Draw platform glow
             this.ctx.globalAlpha = 0.3;
             this.ctx.drawImage(this.assets.platformGlow,
@@ -632,10 +669,10 @@ class Game {
             this.ctx.strokeStyle = '#ffffff';
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
-        });
+        }
 
-        // Draw lava pits with enhanced contrast
-        this.lavaPits.forEach(lavaPit => {
+        // Draw only visible lava pits
+        for (const lavaPit of this.visibleLavaPits) {
             // Draw lava glow (sides and bottom only)
             this.ctx.globalAlpha = 0.4;
             this.ctx.fillStyle = '#ff0000';
@@ -656,22 +693,19 @@ class Game {
                 lavaPit.x, this.groundY,
                 lavaPit.width, lavaPit.height);
             this.ctx.globalCompositeOperation = 'source-over';
-        });
+        }
 
-        // Draw speed boost trail
+        // Draw speed boost trail only if active
         if (this.player.hasSpeedBoost && this.player.boostTrail.length > 0) {
             this.ctx.save();
             this.player.boostTrail.forEach(particle => {
                 this.ctx.globalAlpha = particle.alpha;
-
-                // Draw trail particle
                 const gradient = this.ctx.createLinearGradient(
                     particle.x, particle.y,
                     particle.x - 30, particle.y
                 );
                 gradient.addColorStop(0, '#00ff9d');
                 gradient.addColorStop(1, 'rgba(0, 255, 157, 0)');
-
                 this.ctx.fillStyle = gradient;
                 this.ctx.beginPath();
                 this.ctx.moveTo(particle.x, particle.y - 5 * particle.scale);
@@ -679,8 +713,6 @@ class Game {
                 this.ctx.lineTo(particle.x, particle.y + 5 * particle.scale);
                 this.ctx.closePath();
                 this.ctx.fill();
-
-                // Add glow effect
                 this.ctx.shadowColor = '#00ff9d';
                 this.ctx.shadowBlur = 10;
                 this.ctx.fill();
@@ -693,17 +725,13 @@ class Game {
             this.ctx.globalAlpha = 0.5;
         }
 
-        // Calculate sprite frame dimensions
-        const spriteWidth = this.assets.player.width / this.player.frameCount;
-        const spriteHeight = this.assets.player.height;
-
         // Draw player sprite with proper frame
         this.ctx.drawImage(
             this.assets.player,
-            this.player.frame * spriteWidth, 0,  // Source x, y
-            spriteWidth, spriteHeight,           // Source width, height
-            this.player.x, this.player.y,        // Destination x, y
-            this.player.width, this.player.height // Destination width, height
+            this.player.frame * this.player.spriteWidth, 0,
+            this.player.spriteWidth, this.player.spriteHeight,
+            this.player.x, this.player.y,
+            this.player.width, this.player.height
         );
         this.ctx.globalAlpha = 1.0;
 
@@ -727,20 +755,18 @@ class Game {
         if (this.player.isInvulnerable) return;
 
         this.player.isInvulnerable = true;
-        this.player.invulnerabilityEndTime = Date.now() + 200; // 0.2 seconds
+        this.player.invulnerabilityEndTime = Date.now() + 200;
 
-        // Check if player is still in lava after invulnerability
         setTimeout(() => {
             if (this.player.isInvulnerable) {
                 this.player.isInvulnerable = false;
                 this.gameOver = true;
+                this.isAnimating = false;
                 document.getElementById('gameOver').style.display = 'block';
 
-                // Update final score display
                 const finalScore = Math.floor(this.score);
                 document.getElementById('finalScore').textContent = `Final Score: ${finalScore}`;
 
-                // Show high score message if new record
                 const highScoreMessage = document.getElementById('highScoreMessage');
                 if (finalScore >= this.highScore) {
                     highScoreMessage.style.display = 'block';
@@ -772,27 +798,43 @@ class Game {
         this.player.boostTrail = [];
         this.player.isInvulnerable = false;
         this.player.invulnerabilityEndTime = 0;
-        this.cheatCodeEnabled = false; // Reset cheat code on restart
+        this.cheatCodeEnabled = false;
         document.getElementById('gameOver').style.display = 'none';
         document.getElementById('highScoreMessage').style.display = 'none';
-
-        // Restart background music from beginning
-        this.backgroundMusic.currentTime = 0;
+        this.isAnimating = true;
+        this.lastFrameTime = performance.now();
+        this.animate(this.lastFrameTime);
     }
 
     startGame() {
         this.gameStarted = true;
         document.getElementById('startScreen').style.display = 'none';
         this.startBackgroundMusic();
+        this.isAnimating = true;
+        this.lastFrameTime = performance.now();
+        this.animate(this.lastFrameTime);
     }
 
     animate(currentTime) {
-        const deltaTime = currentTime - this.lastTime;
-        this.lastTime = currentTime;
+        if (!this.isAnimating) return;
 
-        this.update(deltaTime);
+        // Calculate delta time
+        const deltaTime = currentTime - this.lastFrameTime;
+        this.lastFrameTime = currentTime;
+
+        // Accumulate time
+        this.accumulator += deltaTime;
+
+        // Update game state at fixed intervals
+        while (this.accumulator >= this.frameInterval) {
+            this.update(this.frameInterval);
+            this.accumulator -= this.frameInterval;
+        }
+
+        // Draw the current state
         this.draw();
 
+        // Request next frame
         requestAnimationFrame((time) => this.animate(time));
     }
 
@@ -808,17 +850,18 @@ class Game {
 
         // Calculate game parameters based on screen size
         const screenRatio = containerWidth / containerHeight;
+        const baseSize = Math.min(containerWidth, containerHeight);
 
         // Calculate sizes first
-        const playerSize = Math.min(40, containerWidth * 0.08);
-        const minPlatformWidth = Math.min(100, containerWidth * 0.2);
-        const maxPlatformWidth = Math.min(300, containerWidth * 0.4);
-        const minPlatformHeight = Math.min(30, containerHeight * 0.05);
-        const maxPlatformHeight = Math.min(40, containerHeight * 0.07);
-        const minPlatformGap = Math.min(150, containerWidth * 0.25);
-        const maxPlatformGap = Math.min(400, containerWidth * 0.5);
-        const minPlatformHeightDiff = Math.min(80, containerHeight * 0.15);
-        const maxPlatformHeightDiff = Math.min(200, containerHeight * 0.3);
+        const playerSize = Math.min(40, baseSize * 0.08);
+        const minPlatformWidth = Math.min(100, baseSize * 0.2);
+        const maxPlatformWidth = Math.min(300, baseSize * 0.4);
+        const minPlatformHeight = Math.min(30, baseSize * 0.05);
+        const maxPlatformHeight = Math.min(40, baseSize * 0.07);
+        const minPlatformGap = Math.min(150, baseSize * 0.25);
+        const maxPlatformGap = Math.min(400, baseSize * 0.5);
+        const minPlatformHeightDiff = Math.min(80, baseSize * 0.15);
+        const maxPlatformHeightDiff = Math.min(200, baseSize * 0.3);
 
         // Update ground position
         this.groundY = this.canvas.height - (this.canvas.height * 0.1);
@@ -842,8 +885,8 @@ class Game {
         this.maxPlatformHeightDiff = maxPlatformHeightDiff;
 
         // Adjust physics for better mobile feel
-        this.gravity = 0.25;  // Slightly reduced for better control
-        this.jumpForce = -9;  // Adjusted for better feel
+        this.gravity = 0.25;
+        this.jumpForce = -9;
     }
 }
 
