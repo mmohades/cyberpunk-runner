@@ -3,17 +3,70 @@ class Game {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
 
+        // Initialize game parameters first
+        this.minPlatformWidth = 100;
+        this.maxPlatformWidth = 300;
+        this.minPlatformHeight = 30;
+        this.maxPlatformHeight = 40;
+        this.minPlatformGap = 150;
+        this.maxPlatformGap = 400;
+        this.minPlatformHeightDiff = 80;
+        this.maxPlatformHeightDiff = 200;
+        this.gravity = 0.25;
+        this.jumpForce = -9;
+        this.maxJumps = 2;
+
         // Set initial canvas size
         this.setCanvasSize();
 
         // Add resize event listener
         window.addEventListener('resize', () => this.setCanvasSize());
 
-        // Add touch event listeners
+        // Enhanced touch controls
+        let touchStartY = 0;
+        let touchStartTime = 0;
+
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            this.jump();
-        });
+            e.stopPropagation();
+            touchStartY = e.touches[0].clientY;
+            touchStartTime = Date.now();
+
+            if (this.gameStarted && !this.gameOver) {
+                this.jump();
+            } else if (!this.gameStarted) {
+                this.startGame();
+            }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const touchEndY = e.changedTouches[0].clientY;
+            const touchEndTime = Date.now();
+            const swipeDistance = touchStartY - touchEndY;
+            const swipeTime = touchEndTime - touchStartTime;
+
+            // Detect swipe up for double jump
+            if (swipeDistance > 50 && swipeTime < 300) {
+                if (this.gameStarted && !this.gameOver && this.player.jumpsRemaining > 0) {
+                    this.jump();
+                }
+            }
+        }, { passive: false });
+
+        // Prevent default touch behavior
+        document.addEventListener('touchmove', (e) => {
+            if (e.target === this.canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
 
         // Game state
         this.gameOver = false;
@@ -26,12 +79,6 @@ class Game {
         this.cheatCodeEnabled = false;
         this.cheatCodeBuffer = '';
         this.cheatCodeTimeout = null;
-
-        // Physics constants
-        this.gravity = 0.3;  // Reduced from 0.5 for floatier feel
-        this.jumpForce = -10; // Reduced from -12 for more control
-        this.maxJumps = 2;    // Allow double jump
-        this.groundY = this.canvas.height - 80;
 
         // Asset loading
         this.assets = {
@@ -49,25 +96,34 @@ class Game {
         this.assets.lava.src = 'assets/lava.png';
         this.assets.background.src = 'assets/background.png';
 
-        // Player properties
-        this.player = {
-            x: 100,
-            y: this.groundY - 40,
-            width: 40,
-            height: 40,
-            velocityY: 0,
-            isJumping: false,
-            onPlatform: false,
-            jumpsRemaining: this.maxJumps,
-            frame: 0,
-            frameCount: 4,
-            frameDelay: 5,
-            frameTimer: 0,
-            hasSpeedBoost: false,
-            boostEndTime: 0,
-            boostTrail: [], // Array to store trail particles
-            isInvulnerable: false,
-            invulnerabilityEndTime: 0
+        // Initialize player after assets are loaded
+        this.assets.player.onload = () => {
+            // Calculate sprite dimensions
+            const spriteWidth = this.assets.player.width / 4; // Assuming 4 frames
+            const spriteHeight = this.assets.player.height;
+
+            // Player properties
+            this.player = {
+                x: this.canvas.width * 0.1,
+                y: this.groundY - 40,
+                width: Math.min(40, this.canvas.width * 0.08),
+                height: Math.min(40, this.canvas.width * 0.08),
+                velocityY: 0,
+                isJumping: false,
+                onPlatform: false,
+                jumpsRemaining: this.maxJumps,
+                frame: 0,
+                frameCount: 4,
+                frameDelay: 5,
+                frameTimer: 0,
+                hasSpeedBoost: false,
+                boostEndTime: 0,
+                boostTrail: [],
+                isInvulnerable: false,
+                invulnerabilityEndTime: 0,
+                spriteWidth: spriteWidth,
+                spriteHeight: spriteHeight
+            };
         };
 
         // Platforms array
@@ -100,16 +156,6 @@ class Game {
             }
             // Easy to add new platform types here
         };
-
-        // Platform generation settings
-        this.minPlatformWidth = 100;
-        this.maxPlatformWidth = 300;
-        this.minPlatformHeight = 30;
-        this.maxPlatformHeight = 40;
-        this.minPlatformGap = 150;
-        this.maxPlatformGap = 400;
-        this.minPlatformHeightDiff = 80;
-        this.maxPlatformHeightDiff = 200;
 
         // Audio setup
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -258,16 +304,18 @@ class Game {
     }
 
     jump() {
-        if (this.cheatCodeEnabled || this.player.jumpsRemaining > 0) {
+        if (!this.gameStarted || this.gameOver) return;
+
+        if (this.player.jumpsRemaining > 0) {
             this.player.velocityY = this.jumpForce;
             this.player.isJumping = true;
-            this.player.onPlatform = false;
-            if (!this.cheatCodeEnabled) {
-                this.player.jumpsRemaining--;
-            }
+            this.player.jumpsRemaining--;
+            this.playJumpSound();
 
-            // Play jump sound
-            this.createJumpSound();
+            // Add haptic feedback if available
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
         }
     }
 
@@ -398,8 +446,8 @@ class Game {
     }
 
     createLavaPit() {
-        const width = 100 + Math.random() * 150; // Reduced from 150-350 to 100-250
-        const height = 30 + Math.random() * 30; // Reduced from 40-80 to 30-60
+        const width = Math.min(100 + Math.random() * 150, this.canvas.width * 0.3);
+        const height = Math.min(30 + Math.random() * 30, this.canvas.height * 0.05);
         this.lavaPits.push({
             x: this.canvas.width,
             width: width,
@@ -558,7 +606,7 @@ class Game {
         if (!this.gameStarted) return;
 
         // Draw ground with enhanced visibility
-        this.ctx.fillStyle = '#2a2a4a'; // Darker base color
+        this.ctx.fillStyle = '#2a2a4a';
         this.ctx.fillRect(0, this.groundY, this.canvas.width, this.canvas.height - this.groundY);
 
         // Add ground glow
@@ -589,8 +637,8 @@ class Game {
         // Draw lava pits with enhanced contrast
         this.lavaPits.forEach(lavaPit => {
             // Draw lava glow (sides and bottom only)
-            this.ctx.globalAlpha = 0.4; // Increased glow opacity
-            this.ctx.fillStyle = '#ff0000'; // Brighter red for glow
+            this.ctx.globalAlpha = 0.4;
+            this.ctx.fillStyle = '#ff0000';
             // Left glow
             this.ctx.fillRect(lavaPit.x - 10, this.groundY,
                 10, lavaPit.height + 20);
@@ -603,11 +651,11 @@ class Game {
             this.ctx.globalAlpha = 1.0;
 
             // Draw lava with enhanced contrast
-            this.ctx.globalCompositeOperation = 'lighter'; // Add blending mode
+            this.ctx.globalCompositeOperation = 'lighter';
             this.ctx.drawImage(this.assets.lava,
                 lavaPit.x, this.groundY,
                 lavaPit.width, lavaPit.height);
-            this.ctx.globalCompositeOperation = 'source-over'; // Reset blending mode
+            this.ctx.globalCompositeOperation = 'source-over';
         });
 
         // Draw speed boost trail
@@ -642,13 +690,20 @@ class Game {
 
         // Draw player with invulnerability effect
         if (this.player.isInvulnerable) {
-            this.ctx.globalAlpha = 0.5; // Make player semi-transparent when invulnerable
+            this.ctx.globalAlpha = 0.5;
         }
-        this.ctx.drawImage(this.assets.player,
-            this.player.frame * this.player.width, 0,
-            this.player.width, this.player.height,
-            this.player.x, this.player.y,
-            this.player.width, this.player.height
+
+        // Calculate sprite frame dimensions
+        const spriteWidth = this.assets.player.width / this.player.frameCount;
+        const spriteHeight = this.assets.player.height;
+
+        // Draw player sprite with proper frame
+        this.ctx.drawImage(
+            this.assets.player,
+            this.player.frame * spriteWidth, 0,  // Source x, y
+            spriteWidth, spriteHeight,           // Source width, height
+            this.player.x, this.player.y,        // Destination x, y
+            this.player.width, this.player.height // Destination width, height
         );
         this.ctx.globalAlpha = 1.0;
 
@@ -742,25 +797,53 @@ class Game {
     }
 
     setCanvasSize() {
-        // Get the container width
+        // Get the container dimensions
         const container = document.getElementById('gameContainer');
         const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
 
-        // Calculate the height maintaining aspect ratio (16:9)
-        const aspectRatio = 16 / 9;
-        const height = containerWidth / aspectRatio;
-
-        // Set canvas size
+        // Set canvas to fill the container
         this.canvas.width = containerWidth;
-        this.canvas.height = height;
+        this.canvas.height = containerHeight;
 
-        // Update ground Y position
-        this.groundY = this.canvas.height - 80;
+        // Calculate game parameters based on screen size
+        const screenRatio = containerWidth / containerHeight;
 
-        // If player exists, update its position
+        // Calculate sizes first
+        const playerSize = Math.min(40, containerWidth * 0.08);
+        const minPlatformWidth = Math.min(100, containerWidth * 0.2);
+        const maxPlatformWidth = Math.min(300, containerWidth * 0.4);
+        const minPlatformHeight = Math.min(30, containerHeight * 0.05);
+        const maxPlatformHeight = Math.min(40, containerHeight * 0.07);
+        const minPlatformGap = Math.min(150, containerWidth * 0.25);
+        const maxPlatformGap = Math.min(400, containerWidth * 0.5);
+        const minPlatformHeightDiff = Math.min(80, containerHeight * 0.15);
+        const maxPlatformHeightDiff = Math.min(200, containerHeight * 0.3);
+
+        // Update ground position
+        this.groundY = this.canvas.height - (this.canvas.height * 0.1);
+
+        // Only update player if it exists
         if (this.player) {
+            this.player.width = playerSize;
+            this.player.height = playerSize;
+            this.player.x = this.canvas.width * 0.1;
             this.player.y = this.groundY - this.player.height;
         }
+
+        // Update game parameters
+        this.minPlatformWidth = minPlatformWidth;
+        this.maxPlatformWidth = maxPlatformWidth;
+        this.minPlatformHeight = minPlatformHeight;
+        this.maxPlatformHeight = maxPlatformHeight;
+        this.minPlatformGap = minPlatformGap;
+        this.maxPlatformGap = maxPlatformGap;
+        this.minPlatformHeightDiff = minPlatformHeightDiff;
+        this.maxPlatformHeightDiff = maxPlatformHeightDiff;
+
+        // Adjust physics for better mobile feel
+        this.gravity = 0.25;  // Slightly reduced for better control
+        this.jumpForce = -9;  // Adjusted for better feel
     }
 }
 
