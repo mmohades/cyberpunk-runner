@@ -16,8 +16,8 @@ class Game {
         this.maxPlatformGap = 400;
         this.minPlatformHeightDiff = 80;
         this.maxPlatformHeightDiff = 200;
-        this.gravity = 0.25;
-        this.jumpForce = -9;
+        this.gravity = 0.45;
+        this.jumpForce = -15;
         this.maxJumps = 2;
 
         // Performance optimization
@@ -92,9 +92,9 @@ class Game {
         this.gameStarted = false;
         this.score = 0;
         this.highScore = parseInt(localStorage.getItem('highScore')) || 0;
-        this.baseScrollSpeed = 3;
+        this.baseScrollSpeed = 7;
         this.scrollSpeed = this.baseScrollSpeed;
-        this.speedBoostMultiplier = 1.5;
+        this.speedBoostMultiplier = 2.0;
         this.cheatCodeEnabled = false;
         this.cheatCodeBuffer = '';
         this.cheatCodeTimeout = null;
@@ -509,8 +509,8 @@ class Game {
     update(deltaTime) {
         if (this.gameOver || !this.gameStarted) return;
 
-        // Update base speed for difficulty
-        this.baseScrollSpeed = 3 + Math.floor(this.score / 1000);
+        // Update base speed for difficulty - even faster progression
+        this.baseScrollSpeed = 7 + Math.floor(this.score / 600); // Much faster speed increase
 
         // Handle speed boost state
         if (this.player.hasSpeedBoost && Date.now() >= this.player.boostEndTime) {
@@ -785,7 +785,7 @@ class Game {
         this.lavaPits = [];
         this.platformTimer = 0;
         this.lavaTimer = 0;
-        this.baseScrollSpeed = 3;
+        this.baseScrollSpeed = 7;
         this.scrollSpeed = this.baseScrollSpeed;
         this.player.x = 100;
         this.player.y = this.groundY - this.player.height;
@@ -852,19 +852,19 @@ class Game {
         const screenRatio = containerWidth / containerHeight;
         const baseSize = Math.min(containerWidth, containerHeight);
 
-        // Calculate sizes first
-        const playerSize = Math.min(40, baseSize * 0.08);
-        const minPlatformWidth = Math.min(100, baseSize * 0.2);
-        const maxPlatformWidth = Math.min(300, baseSize * 0.4);
-        const minPlatformHeight = Math.min(30, baseSize * 0.05);
-        const maxPlatformHeight = Math.min(40, baseSize * 0.07);
-        const minPlatformGap = Math.min(150, baseSize * 0.25);
-        const maxPlatformGap = Math.min(400, baseSize * 0.5);
-        const minPlatformHeightDiff = Math.min(80, baseSize * 0.15);
-        const maxPlatformHeightDiff = Math.min(200, baseSize * 0.3);
+        // Calculate sizes first - adjusted for iPhone Pro Max
+        const playerSize = Math.min(50, baseSize * 0.1); // Slightly larger player
+        const minPlatformWidth = Math.min(120, baseSize * 0.25); // Wider platforms
+        const maxPlatformWidth = Math.min(350, baseSize * 0.45);
+        const minPlatformHeight = Math.min(35, baseSize * 0.06);
+        const maxPlatformHeight = Math.min(45, baseSize * 0.08);
+        const minPlatformGap = Math.min(180, baseSize * 0.3); // Larger gaps
+        const maxPlatformGap = Math.min(450, baseSize * 0.55);
+        const minPlatformHeightDiff = Math.min(90, baseSize * 0.17);
+        const maxPlatformHeightDiff = Math.min(220, baseSize * 0.35);
 
-        // Update ground position
-        this.groundY = this.canvas.height - (this.canvas.height * 0.1);
+        // Update ground position - adjusted for iPhone Pro Max
+        this.groundY = this.canvas.height - (this.canvas.height * 0.12);
 
         // Only update player if it exists
         if (this.player) {
@@ -885,8 +885,8 @@ class Game {
         this.maxPlatformHeightDiff = maxPlatformHeightDiff;
 
         // Adjust physics for better mobile feel
-        this.gravity = 0.25;
-        this.jumpForce = -9;
+        this.gravity = 0.45; // Even more gravity
+        this.jumpForce = -15; // Even higher jumps
     }
 }
 
