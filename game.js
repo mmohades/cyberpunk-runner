@@ -2,8 +2,18 @@ class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
-        this.canvas.width = 1280;  // Increased from 800
-        this.canvas.height = 720;  // Increased from 600, maintaining 16:9 ratio
+
+        // Set initial canvas size
+        this.setCanvasSize();
+
+        // Add resize event listener
+        window.addEventListener('resize', () => this.setCanvasSize());
+
+        // Add touch event listeners
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.jump();
+        });
 
         // Game state
         this.gameOver = false;
@@ -542,7 +552,7 @@ class Game {
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw background
+        // Draw background with proper scaling
         this.ctx.drawImage(this.assets.background, 0, 0, this.canvas.width, this.canvas.height);
 
         if (!this.gameStarted) return;
@@ -729,6 +739,28 @@ class Game {
         this.draw();
 
         requestAnimationFrame((time) => this.animate(time));
+    }
+
+    setCanvasSize() {
+        // Get the container width
+        const container = document.getElementById('gameContainer');
+        const containerWidth = container.clientWidth;
+
+        // Calculate the height maintaining aspect ratio (16:9)
+        const aspectRatio = 16 / 9;
+        const height = containerWidth / aspectRatio;
+
+        // Set canvas size
+        this.canvas.width = containerWidth;
+        this.canvas.height = height;
+
+        // Update ground Y position
+        this.groundY = this.canvas.height - 80;
+
+        // If player exists, update its position
+        if (this.player) {
+            this.player.y = this.groundY - this.player.height;
+        }
     }
 }
 
